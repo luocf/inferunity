@@ -1,0 +1,76 @@
+==========================================
+  InferUnity Qwen2.5-0.5B 完整自动化设置
+==========================================
+
+[1;33m[1/6] 设置Python虚拟环境...[0m
+激活虚拟环境...
+安装Python依赖...
+✅ PyTorch: 2.2.2
+✅ Transformers: 4.57.3
+
+[1;33m[2/6] 转换模型为ONNX格式...[0m
+正在转换模型（这可能需要几分钟）...
+`torch_dtype` is deprecated! Use `dtype` instead!
+Traceback (most recent call last):
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/transformers/utils/generic.py", line 1079, in wrapper
+    outputs = func(self, *args, **kwargs_without_recordable)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Qwen2Model.forward() got multiple values for argument 'use_cache'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/scripts/convert_qwen_to_onnx.py", line 39, in convert_to_onnx
+    torch.onnx.export(
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/onnx/utils.py", line 516, in export
+    _export(
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/onnx/utils.py", line 1613, in _export
+    graph, params_dict, torch_out = _model_to_graph(
+                                    ^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/onnx/utils.py", line 1135, in _model_to_graph
+    graph, params, torch_out, module = _create_jit_graph(model, args)
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/onnx/utils.py", line 1011, in _create_jit_graph
+    graph, torch_out = _trace_and_get_graph_from_model(model, args)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/onnx/utils.py", line 915, in _trace_and_get_graph_from_model
+    trace_graph, torch_out, inputs_states = torch.jit._get_trace_graph(
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/jit/_trace.py", line 1296, in _get_trace_graph
+    outs = ONNXTracedModule(
+           ^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1511, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1520, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/jit/_trace.py", line 138, in forward
+    graph, out = torch._C._create_graph_by_tracing(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/jit/_trace.py", line 129, in wrapper
+    outs.append(self.inner(*trace_inputs))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1511, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1520, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1501, in _slow_forward
+    result = self.forward(*input, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/transformers/utils/generic.py", line 1081, in wrapper
+    raise original_exception
+  File "/Users/lcf/Desktop/workspace/语音/workspace/ifusionengine/venv/lib/python3.12/site-packages/transformers/utils/generic.py", line 1072, in wrapper
+    outputs = func(self, *args, **kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Qwen2Model.forward() got multiple values for argument 'use_cache'
+正在加载模型: models/Qwen2.5-0.5B
+✅ 模型加载成功
+准备输入 (max_length=128)...
+输入形状: torch.Size([1, 6])
+输入示例: [9707, 11, 1246, 525, 498, 30]
+
+正在导出ONNX模型到: models/Qwen2.5-0.5B/qwen2.5-0.5b.onnx
+❌ ONNX导出失败: Qwen2Model.forward() got multiple values for argument 'use_cache'

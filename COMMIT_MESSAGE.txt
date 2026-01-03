@@ -1,0 +1,20 @@
+feat: 完成推理引擎核心功能实现
+
+主要更新：
+- ✅ 修复算子注册问题（使用-force_load确保静态初始化）
+- ✅ 修复ONNX输入形状解析（与其他推理引擎保持一致）
+- ✅ 实现26个算子（Add, Mul, Conv, Relu, MatMul, GELU, SiLU等）
+- ✅ 完成ONNX模型加载和推理功能
+- ✅ 验证Add和Conv模型推理成功
+
+技术改进：
+- 正确解析ONNX模型的输入形状信息
+- 支持初始值（权重）的正确处理
+- 修复Graph验证逻辑，支持初始值验证
+- 优化CMake配置，使用-force_load确保算子注册
+
+测试结果：
+- simple_add.onnx: 推理成功 ✓
+- simple_conv.onnx: 推理成功 ✓
+- 输入形状正确显示
+- 输出形状正确推断

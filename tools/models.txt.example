@@ -1,0 +1,13 @@
+# 标准模型测试列表
+# 每行一个模型路径，以#开头的行为注释
+
+# 示例模型路径（需要替换为实际路径）
+# model1.onnx
+# model2.onnx
+# model3.onnx
+
+# 使用说明：
+# 1. 复制此文件为 models.txt
+# 2. 添加要测试的模型路径
+# 3. 运行: inferunity_benchmark_suite run models.txt results.csv
+
