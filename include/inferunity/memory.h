@@ -93,5 +93,11 @@ std::vector<TensorLifetime> AnalyzeTensorLifetimes(const Graph* graph);
 // 内存复用分配（参考NCNN的内存复用机制）
 Status AllocateMemoryWithReuse(Graph* graph);
 
+// 内存池公共接口（新增）
+void* AllocateMemory(size_t size, size_t alignment = 16);
+void FreeMemory(void* ptr);
+void ReleaseUnusedMemory();
+MemoryStats GetMemoryStats();  // CPU设备的内存统计
+
 } // namespace inferunity
 

@@ -242,14 +242,28 @@ public:
             // 计算mean(x^2)
             float mean_sq = 0.0f;
             for (int64_t i = 0; i < norm_size; ++i) {
-                mean_sq += group_input[i] * group_input[i];
+                float val = group_input[i];
+                mean_sq += val * val;
             }
-            mean_sq /= norm_size;
+            mean_sq /= static_cast<float>(norm_size);
             
-            // 归一化
-            float inv_rms = 1.0f / std::sqrt(mean_sq + epsilon);
+            // 归一化：计算inv_rms，避免除零
+            float rms_sq = mean_sq + epsilon;
+            if (rms_sq <= 0.0f) {
+                rms_sq = epsilon;  // 防止数值问题
+            }
+            float inv_rms = 1.0f / std::sqrt(rms_sq);
+            
+            // 应用归一化和scale
+            // scale的形状应该匹配归一化维度
+            const Shape& scale_shape = scale->GetShape();
+            int64_t scale_size = scale_shape.GetElementCount();
+            
             for (int64_t i = 0; i < norm_size; ++i) {
-                group_output[i] = group_input[i] * inv_rms * scale_data[i];
+                // scale索引：如果scale_size == norm_size，直接使用i
+                // 否则使用 i % scale_size 来处理广播
+                int64_t scale_idx = (scale_size == norm_size) ? i : (i % scale_size);
+                group_output[i] = group_input[i] * inv_rms * scale_data[scale_idx];
             }
         }
         

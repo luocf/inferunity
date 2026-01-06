@@ -9,6 +9,8 @@
 #include <sstream>
 #include <unordered_map>
 #include <algorithm>
+#include <thread>
+#include <functional>
 
 // 前向声明形状推断函数
 namespace inferunity {

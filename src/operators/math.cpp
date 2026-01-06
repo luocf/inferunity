@@ -47,6 +47,7 @@ public:
         float* out_data = static_cast<float*>(output->GetData());
         
         // 逐元素加法（简化：假设形状相同）
+        // TODO: 添加SIMD优化（使用simd_utils.h中的函数）
         for (size_t i = 0; i < count; ++i) {
             out_data[i] = data0[i] + data1[i];
         }

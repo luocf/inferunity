@@ -1,111 +1,108 @@
 # 下一步工作计划
 
-## 当前状态
+## ✅ 已完成
 
-✅ **编译成功** - 所有组件已编译
-✅ **核心功能正常** - Tensor、Graph等核心数据结构工作正常
-⚠️ **执行提供者注册问题** - CPUExecutionProvider未自动注册
-⚠️ **需要ONNX模型** - 进行完整推理测试
+1. **修复线程池问题**
+   - ✅ 修复 `WaitAll()` 只检查队列为空的问题
+   - ✅ 添加 `active_tasks_` 计数器跟踪正在执行的任务
+   - ✅ 使用 `atexit` 注册清理函数，修复程序退出时的 mutex 警告
 
-## 优先级任务
+2. **资源管理优化**
+   - ✅ 内存池优化（支持重用和对齐）
+   - ✅ Tensor 生命周期分析
+   - ✅ 内存复用分配机制
 
-### 1. 修复执行提供者注册（高优先级）
+3. **CPU后端测试**
+   - ✅ 执行提供者注册测试通过
+   - ✅ CPU执行提供者功能测试通过
+   - ✅ 内存管理测试通过
+   - ✅ 线程池测试通过
+   - ✅ InferenceSession创建测试通过
 
-**问题**：CPUExecutionProvider的静态注册代码没有被执行
+## 📋 下一步计划
 
-**解决方案**：
-- 方案A：在`InferenceSession::Initialize()`中显式调用注册函数
-- 方案B：修改注册机制，使用更可靠的初始化方法
-- 方案C：在`engine.cpp`中直接引用`cpu_backend.cpp`的符号
+### 1. ONNX Runtime 集成（可选）
 
-**建议**：采用方案A，在`PrepareExecutionProviders()`之前显式初始化
+**当前状态**: 系统检测到 Python 版本的 ONNX Runtime，但 C++ 库未安装。
 
-### 2. 转换Qwen2.5-0.5B模型（高优先级）
+**安装选项**:
 
-**当前问题**：
-- `torch.onnx.export`遇到`TypeError`和`UnsupportedOperatorError`
-- `optimum`库有`ImportError`
-
-**解决方案**：
-- 方案A：修复PyTorch ONNX导出问题
-  - 检查Qwen2模型的forward方法签名
-  - 使用正确的参数调用`torch.onnx.export`
-  - 可能需要修改模型包装器
-  
-- 方案B：使用其他转换工具
-  - 使用HuggingFace的`transformers` + `onnxruntime`
-  - 使用`onnx`库直接转换
-  - 使用预转换的ONNX模型
-
-- 方案C：使用简单的测试模型
-  - 创建一个简单的ONNX模型用于测试
-  - 使用ONNX官方示例模型
-
-**建议**：先尝试方案C，确保推理引擎可以加载和运行ONNX模型，然后再处理Qwen模型转换
-
-### 3. 测试推理引擎（中优先级）
-
-**需要完成**：
-1. 修复执行提供者注册
-2. 准备ONNX模型文件
-3. 测试模型加载
-4. 测试推理执行
-5. 验证输出结果
-
-### 4. 完善功能（低优先级）
-
-- 修复Google Test链接问题
-- 完善错误处理
-- 添加更多测试用例
-- 性能优化
-
-## 推荐执行顺序
-
-1. **立即执行**：修复执行提供者注册问题
-   - 修改`src/core/engine.cpp`，在`PrepareExecutionProviders()`中显式初始化
-   - 测试`InferenceSession::Create()`是否可以成功
-
-2. **然后执行**：创建或获取简单的ONNX测试模型
-   - 使用ONNX官方示例或创建一个简单的Add/Mul模型
-   - 测试推理引擎可以加载和运行
-
-3. **最后执行**：处理Qwen模型转换
-   - 在确保推理引擎工作正常后，再处理复杂的模型转换
-
-## 快速开始
-
-### 修复执行提供者（推荐方案）
-
-在`src/core/engine.cpp`的`PrepareExecutionProviders()`函数开头添加：
-
-```cpp
-// 确保CPU执行提供者已注册
-// 通过引用一个符号来强制链接cpu_backend
-extern void InitializeExecutionProviders();
-InitializeExecutionProviders();
+#### 选项A: 使用 Homebrew（推荐，简单）
+```bash
+brew install onnxruntime
 ```
 
-### 创建简单测试模型
-
-可以使用Python脚本创建一个简单的ONNX模型：
-
-```python
-import onnx
-from onnx import helper, TensorProto
-
-# 创建一个简单的Add模型
-input1 = helper.make_tensor_value_info('input1', TensorProto.FLOAT, [2, 3])
-input2 = helper.make_tensor_value_info('input2', TensorProto.FLOAT, [2, 3])
-output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [2, 3])
-
-add_node = helper.make_node('Add', ['input1', 'input2'], ['output'])
-
-graph = helper.make_graph([add_node], 'test_model',
-                          [input1, input2], [output])
-model = helper.make_model(graph)
-
-onnx.save(model, 'test_model.onnx')
+#### 选项B: 从源码编译（完整控制）
+```bash
+git clone --recursive https://github.com/microsoft/onnxruntime.git
+cd onnxruntime
+./build.sh --config Release --build_shared_lib --parallel
 ```
 
-然后使用这个模型测试推理引擎。
+#### 选项C: 下载预编译版本
+从 [ONNX Runtime Releases](https://github.com/microsoft/onnxruntime/releases) 下载 macOS 版本。
 
+**配置 CMake**:
+```bash
+cd build
+cmake .. -DENABLE_ONNXRUNTIME=ON \
+         -Donnxruntime_DIR=/path/to/onnxruntime
+```
+
+### 2. 继续优化和测试
+
+#### 2.1 算子测试完善
+- [x] 添加归一化算子测试（LayerNorm, RMSNorm, BatchNorm）✅
+- [x] 添加形状操作算子测试（Gather, Slice, Transpose）✅
+- [x] 创建Conv算子调试测试 ✅
+- [ ] 添加边界条件和错误处理测试
+- [ ] 提高测试覆盖率到 80%+
+
+#### 2.2 性能优化
+- [x] Conv 算子调试测试框架 ✅
+- [ ] 运行测试并修复Conv输出值异常
+- [ ] MatMul 算子优化（考虑使用 BLAS）
+- [ ] 内存访问模式优化
+- [ ] 缓存友好的数据布局
+
+#### 2.3 功能增强
+- [ ] 支持动态形状推理
+- [ ] 支持批量推理
+- [ ] 支持异步推理
+- [ ] 添加性能分析工具
+
+### 3. 文档完善
+
+- [ ] 更新 API 文档
+- [ ] 添加使用示例
+- [ ] 添加性能基准测试结果
+- [ ] 添加故障排除指南
+
+## 🎯 优先级建议
+
+**高优先级**:
+1. 完善算子测试（确保正确性）
+2. 调试 Conv 算子输出值异常
+3. 性能基准测试
+
+**中优先级**:
+4. ONNX Runtime 集成（如果需要）
+5. 性能优化
+6. 功能增强
+
+**低优先级**:
+7. 文档完善
+8. 代码重构
+
+## 📊 当前项目状态
+
+- **核心功能**: ✅ 完成
+- **CPU后端**: ✅ 完成并测试通过
+- **资源管理**: ✅ 完成
+- **测试覆盖**: ~60%
+- **性能优化**: 进行中
+- **ONNX Runtime集成**: 待安装库
+
+---
+
+**最后更新**: 2026-01-06

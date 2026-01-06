@@ -1,6 +1,7 @@
 #include "inferunity/runtime.h"
 #include "inferunity/backend.h"
 #include "inferunity/tensor.h"
+#include "inferunity/operator.h"
 #include <algorithm>
 #include <thread>
 #include <chrono>
@@ -10,6 +11,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <vector>
 
 namespace inferunity {
 
@@ -73,6 +75,57 @@ void ExecutionEngine::SetBackends(const std::vector<std::shared_ptr<Backend>>& b
     for (const auto& backend : backends_) {
         backend_ptrs_.push_back(backend.get());
     }
+}
+
+Status ExecutionEngine::ExecuteGraph(Graph* graph, ExecutionContext* ctx) {
+    if (!graph || !ctx) {
+        return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT, "Invalid arguments");
+    }
+    
+    if (backend_ptrs_.empty()) {
+        return Status::Error(StatusCode::ERROR_RUNTIME_ERROR, "No backends available");
+    }
+    
+    // 使用调度器执行图
+    return scheduler_->Schedule(graph, backend_ptrs_, ctx);
+}
+
+Status ExecutionEngine::ExecuteGraphAsync(Graph* graph, ExecutionContext* ctx,
+                                         std::function<void(Status)> callback) {
+    // 使用线程池异步执行
+    ThreadPool::EnqueueTask([this, graph, ctx, callback]() {
+        Status status = this->ExecuteGraph(graph, ctx);
+        if (callback) {
+            callback(status);
+        }
+    });
+    
+    return Status::Ok();
+}
+
+Status ExecutionEngine::ExecuteGraphsParallel(const std::vector<Graph*>& graphs,
+                                             const std::vector<ExecutionContext*>& contexts) {
+    if (graphs.size() != contexts.size()) {
+        return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT, "Graph and context count mismatch");
+    }
+    
+    // 使用std::async并行执行多个图
+    std::vector<std::future<Status>> futures;
+    for (size_t i = 0; i < graphs.size(); ++i) {
+        futures.push_back(std::async(std::launch::async, [this, &graphs, &contexts, i]() {
+            return this->ExecuteGraph(graphs[i], contexts[i]);
+        }));
+    }
+    
+    // 等待所有任务完成并检查错误
+    for (auto& future : futures) {
+        Status status = future.get();
+        if (!status.IsOk()) {
+            return status;
+        }
+    }
+    
+    return Status::Ok();
 }
 
 Status ExecutionEngine::Execute(const Graph* graph,

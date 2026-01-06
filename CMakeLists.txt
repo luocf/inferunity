@@ -34,6 +34,7 @@ option(ENABLE_VULKAN "Enable Vulkan backend" OFF)
 option(ENABLE_METAL "Enable Metal backend (macOS)" OFF)
 option(ENABLE_SNPE "Enable SNPE backend" OFF)
 option(ENABLE_ARMNN "Enable ARM NN backend" OFF)
+option(ENABLE_ONNXRUNTIME "Enable ONNX Runtime backend" OFF)
 option(USE_SYSTEM_PROTOBUF "Use system protobuf" ON)
 
 # 输出目录
@@ -114,6 +115,8 @@ add_library(inferunity_core STATIC
     src/core/tensor.cpp
     src/core/memory.cpp
     src/core/memory_lifetime.cpp
+    src/core/memory_pool.cpp
+    src/core/tensor_lifetime_optimizer.cpp
     src/core/graph.cpp
     src/core/engine.cpp
     src/core/shape_inference.cpp
@@ -215,6 +218,7 @@ target_link_libraries(inferunity_optimizers PUBLIC inferunity_core)
 add_library(inferunity_runtime STATIC
     src/runtime/runtime.cpp
     src/runtime/parallel_executor.cpp
+    src/runtime/thread_pool.cpp
 )
 
 target_include_directories(inferunity_runtime PUBLIC
@@ -236,7 +240,35 @@ target_include_directories(inferunity_backends PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(inferunity_backends PUBLIC inferunity_core inferunity_runtime)
+target_link_libraries(inferunity_backends PUBLIC inferunity_core inferunity_runtime inferunity_operators)
+
+# ONNX Runtime后端（可选）
+if(ENABLE_ONNXRUNTIME)
+    # 查找ONNX Runtime
+    find_package(onnxruntime QUIET)
+    
+    if(onnxruntime_FOUND)
+        message(STATUS "ONNX Runtime found, enabling ONNX Runtime backend")
+        
+        # 定义宏以启用ONNX Runtime后端代码
+        target_compile_definitions(inferunity_backends PRIVATE INFERUNITY_USE_ONNXRUNTIME)
+        
+        # 将ONNX Runtime后端源文件添加到主后端库
+        target_sources(inferunity_backends PRIVATE
+            src/backends/onnxruntime_backend.cpp
+        )
+        
+        target_link_libraries(inferunity_backends PUBLIC
+            ${onnxruntime_LIBRARIES}
+        )
+        
+        target_include_directories(inferunity_backends PUBLIC
+            ${onnxruntime_INCLUDE_DIRS}
+        )
+    else()
+        message(WARNING "ONNX Runtime not found. Install it or set onnxruntime_DIR to enable ONNX Runtime backend.")
+    endif()
+endif()
 
 # ============================================================================
 # 可选后端
@@ -448,6 +480,14 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(test_operator_registry PRIVATE inferunity)
     set_target_properties(test_operator_registry PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    
+    add_executable(test_cpu_backend
+        examples/test_cpu_backend.cpp
+    )
+    target_link_libraries(test_cpu_backend PRIVATE inferunity)
+    set_target_properties(test_cpu_backend PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
 endif()

@@ -1,16 +1,70 @@
+// 运行时系统
+// 包含执行引擎、调度器、线程池等
+
 #pragma once
 
 #include "types.h"
-#include "graph.h"
 #include "tensor.h"
+#include "graph.h"
+#include "operator.h"
 #include "backend.h"
-#include "optimizer.h"
 #include <memory>
 #include <vector>
 #include <functional>
+#include <mutex>
+#include <condition_variable>
 #include <future>
+#include <string>
 
 namespace inferunity {
+
+// ExecutionContext 在 operator.h 中定义，这里只做前向声明
+// 使用 operator.h 中的具体实现类
+
+// 调度器基类
+class Scheduler {
+public:
+    virtual ~Scheduler() = default;
+    virtual Status Schedule(const Graph* graph,
+                           const std::vector<Backend*>& backends,
+                           ExecutionContext* ctx) = 0;
+    virtual std::vector<Node*> GetExecutionOrder(const Graph* graph) const = 0;
+};
+
+// TopologicalScheduler
+class TopologicalScheduler : public Scheduler {
+public:
+    Status Schedule(const Graph* graph,
+                   const std::vector<Backend*>& backends,
+                   ExecutionContext* ctx) override;
+    std::vector<Node*> GetExecutionOrder(const Graph* graph) const override;
+};
+
+// PipelineScheduler
+class PipelineScheduler : public Scheduler {
+public:
+    explicit PipelineScheduler(int num_stages = 4);
+    Status Schedule(const Graph* graph,
+                   const std::vector<Backend*>& backends,
+                   ExecutionContext* ctx) override;
+    std::vector<Node*> GetExecutionOrder(const Graph* graph) const override;
+private:
+    int num_stages_;
+    std::vector<std::vector<Node*>> stages_;
+    void PartitionGraph(const Graph* graph);
+};
+
+// ParallelScheduler
+class ParallelScheduler : public Scheduler {
+public:
+    explicit ParallelScheduler(int num_threads = 0);
+    Status Schedule(const Graph* graph,
+                   const std::vector<Backend*>& backends,
+                   ExecutionContext* ctx) override;
+    std::vector<Node*> GetExecutionOrder(const Graph* graph) const override;
+private:
+    int num_threads_;
+};
 
 // 执行模式
 enum class ExecutionMode {
@@ -40,61 +94,13 @@ struct ProfilingResult {
     size_t peak_memory_bytes;
 };
 
-// 调度器接口
-class Scheduler {
+// 线程池
+class ThreadPool {
 public:
-    virtual ~Scheduler() = default;
-    
-    // 调度执行
-    virtual Status Schedule(const Graph* graph, 
-                           const std::vector<Backend*>& backends,
-                           ExecutionContext* ctx) = 0;
-    
-    // 获取执行顺序
-    virtual std::vector<Node*> GetExecutionOrder(const Graph* graph) const = 0;
-};
-
-// 拓扑排序调度器
-class TopologicalScheduler : public Scheduler {
-public:
-    Status Schedule(const Graph* graph,
-                   const std::vector<Backend*>& backends,
-                   ExecutionContext* ctx) override;
-    
-    std::vector<Node*> GetExecutionOrder(const Graph* graph) const override;
-};
-
-// 流水线调度器
-class PipelineScheduler : public Scheduler {
-public:
-    explicit PipelineScheduler(int num_stages = 4) : num_stages_(num_stages) {}
-    
-    Status Schedule(const Graph* graph,
-                   const std::vector<Backend*>& backends,
-                   ExecutionContext* ctx) override;
-    
-    std::vector<Node*> GetExecutionOrder(const Graph* graph) const override;
-    
-private:
-    int num_stages_;
-    std::vector<std::vector<Node*>> stages_;
-    
-    void PartitionGraph(const Graph* graph);
-};
-
-// 并行调度器（多线程执行）
-class ParallelScheduler : public Scheduler {
-public:
-    explicit ParallelScheduler(int num_threads = 0);
-    
-    Status Schedule(const Graph* graph,
-                   const std::vector<Backend*>& backends,
-                   ExecutionContext* ctx) override;
-    
-    std::vector<Node*> GetExecutionOrder(const Graph* graph) const override;
-    
-private:
-    int num_threads_;
+    static void EnqueueTask(std::function<void()> task);
+    static void WaitAll();
+    static size_t GetThreadCount();
+    static size_t GetPendingTaskCount();
 };
 
 // 执行引擎
@@ -103,34 +109,44 @@ public:
     ExecutionEngine();
     ~ExecutionEngine();
     
+    // 设置执行提供者
+    void SetBackends(const std::vector<std::shared_ptr<ExecutionProvider>>& backends);
+    
     // 设置调度器
     void SetScheduler(std::unique_ptr<Scheduler> scheduler);
     
-    // 执行图
+    // 执行图（使用Tensor输入输出）
     Status Execute(const Graph* graph,
-                  const std::vector<Tensor*>& inputs,
-                  std::vector<Tensor*>& outputs,
-                  const ExecutionOptions& options = ExecutionOptions());
+                   const std::vector<Tensor*>& inputs,
+                   std::vector<Tensor*>& outputs,
+                   const ExecutionOptions& options = ExecutionOptions());
     
     // 异步执行
     std::future<Status> ExecuteAsync(const Graph* graph,
-                                    const std::vector<Tensor*>& inputs,
-                                    std::vector<Tensor*>& outputs,
-                                    const ExecutionOptions& options = ExecutionOptions());
+                                     const std::vector<Tensor*>& inputs,
+                                     std::vector<Tensor*>& outputs,
+                                     const ExecutionOptions& options = ExecutionOptions());
     
     // 性能分析
     Status Profile(const Graph* graph,
-                  const std::vector<Tensor*>& inputs,
-                  ProfilingResult& result);
+                   const std::vector<Tensor*>& inputs,
+                   ProfilingResult& result);
     
-    // 设置后端
-    void SetBackends(const std::vector<std::shared_ptr<Backend>>& backends);
+    // 执行图（使用ExecutionContext）
+    Status ExecuteGraph(Graph* graph, ExecutionContext* ctx);
+    
+    // 异步执行（使用ExecutionContext）
+    Status ExecuteGraphAsync(Graph* graph, ExecutionContext* ctx,
+                             std::function<void(Status)> callback);
+    
+    // 并行执行多个图
+    Status ExecuteGraphsParallel(const std::vector<Graph*>& graphs,
+                                const std::vector<ExecutionContext*>& contexts);
     
 private:
+    std::vector<std::shared_ptr<ExecutionProvider>> backends_;
+    std::vector<ExecutionProvider*> backend_ptrs_;
     std::unique_ptr<Scheduler> scheduler_;
-    std::vector<std::shared_ptr<Backend>> backends_;
-    std::vector<Backend*> backend_ptrs_;
-    
     Status ExecuteInternal(const Graph* graph,
                           const std::vector<Tensor*>& inputs,
                           std::vector<Tensor*>& outputs,
@@ -138,4 +154,3 @@ private:
 };
 
 } // namespace inferunity
-

@@ -156,6 +156,11 @@ namespace {
 }
 
 MemoryStats GetMemoryStats(DeviceType device) {
+    // 对于CPU设备，使用内存池统计
+    if (device == DeviceType::CPU) {
+        return ::inferunity::GetMemoryStats();
+    }
+    // 其他设备使用设备特定统计
     std::lock_guard<std::mutex> lock(stats_mutex);
     auto it = device_stats.find(device);
     if (it != device_stats.end()) {
