@@ -403,6 +403,132 @@ Status InferenceSession::Profile(ProfilingResult& result) {
     return execution_engine_->Profile(graph_.get(), inputs, result);
 }
 
+// 批量推理实现
+Status InferenceSession::RunBatch(
+    const std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_inputs,
+    std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_outputs) {
+    
+    if (batch_inputs.empty()) {
+        return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT, "Empty batch");
+    }
+    
+    size_t batch_size = batch_inputs.size();
+    batch_outputs.clear();
+    batch_outputs.resize(batch_size);
+    
+    // 验证所有输入的batch大小一致
+    for (size_t i = 0; i < batch_inputs.size(); ++i) {
+        if (batch_inputs[i].size() != batch_inputs[0].size()) {
+            return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT,
+                               "Inconsistent input count in batch");
+        }
+    }
+    
+    // 顺序执行每个batch
+    for (size_t b = 0; b < batch_size; ++b) {
+        std::vector<Tensor*> input_ptrs;
+        for (const auto& t : batch_inputs[b]) {
+            input_ptrs.push_back(t.get());
+        }
+        std::vector<Tensor*> output_ptrs;
+        Status status = Run(input_ptrs, output_ptrs);
+        if (!status.IsOk()) {
+            return status;
+        }
+        
+        // 转换为shared_ptr
+        std::vector<std::shared_ptr<Tensor>> outputs;
+        for (Tensor* t : output_ptrs) {
+            outputs.push_back(std::shared_ptr<Tensor>(t, [](Tensor*){}));
+        }
+        batch_outputs[b] = outputs;
+    }
+    
+    return Status::Ok();
+}
+
+// 批量推理（优化版本：合并batch维度）
+Status InferenceSession::RunBatchOptimized(
+    const std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_inputs,
+    std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_outputs) {
+    
+    if (batch_inputs.empty()) {
+        return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT, "Empty batch");
+    }
+    
+    size_t batch_size = batch_inputs.size();
+    size_t num_inputs = batch_inputs[0].size();
+    
+    // 合并batch维度
+    std::vector<std::shared_ptr<Tensor>> merged_inputs;
+    
+    for (size_t i = 0; i < num_inputs; ++i) {
+        const Shape& ref_shape = batch_inputs[0][i]->GetShape();
+        DataType dtype = batch_inputs[0][i]->GetDataType();
+        
+        std::vector<int64_t> merged_dims = ref_shape.dims;
+        if (merged_dims.empty()) {
+            return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT,
+                               "Invalid input shape");
+        }
+        
+        merged_dims[0] = static_cast<int64_t>(batch_size) * merged_dims[0];
+        auto merged_tensor = CreateTensor(Shape(merged_dims), dtype, DeviceType::CPU);
+        
+        size_t sample_size = batch_inputs[0][i]->GetSizeInBytes();
+        uint8_t* merged_data = static_cast<uint8_t*>(merged_tensor->GetData());
+        
+        for (size_t b = 0; b < batch_size; ++b) {
+            const void* sample_data = batch_inputs[b][i]->GetData();
+            std::memcpy(merged_data + b * sample_size, sample_data, sample_size);
+        }
+        
+        merged_inputs.push_back(merged_tensor);
+    }
+    
+    // 执行一次推理
+    std::vector<Tensor*> merged_input_ptrs;
+    for (const auto& t : merged_inputs) {
+        merged_input_ptrs.push_back(t.get());
+    }
+    std::vector<Tensor*> merged_output_ptrs;
+    Status status = Run(merged_input_ptrs, merged_output_ptrs);
+    if (!status.IsOk()) {
+        return status;
+    }
+    
+    // 分割输出
+    batch_outputs.clear();
+    batch_outputs.resize(batch_size);
+    
+    for (size_t o = 0; o < merged_output_ptrs.size(); ++o) {
+        const Shape& output_shape = merged_output_ptrs[o]->GetShape();
+        DataType dtype = merged_output_ptrs[o]->GetDataType();
+        
+        std::vector<int64_t> sample_dims = output_shape.dims;
+        if (sample_dims.empty()) continue;
+        sample_dims[0] = sample_dims[0] / static_cast<int64_t>(batch_size);
+        
+        size_t element_size = Tensor::GetDataTypeSize(dtype);
+        size_t sample_size = 1;
+        for (int64_t dim : sample_dims) {
+            sample_size *= dim;
+        }
+        sample_size *= element_size;
+        
+        const uint8_t* merged_data = static_cast<const uint8_t*>(merged_output_ptrs[o]->GetData());
+        
+        for (size_t b = 0; b < batch_size; ++b) {
+            auto sample_tensor = CreateTensor(Shape(sample_dims), dtype, DeviceType::CPU);
+            uint8_t* sample_data = static_cast<uint8_t*>(sample_tensor->GetData());
+            std::memcpy(sample_data, merged_data + b * sample_size, sample_size);
+            batch_outputs[b].push_back(sample_tensor);
+        }
+    }
+    
+    return Status::Ok();
+}
+
 void InferenceSession::SetOptions(const SessionOptions& options) {
     options_ = options;
     // 重新初始化 (参考ONNX Runtime的配置更新)

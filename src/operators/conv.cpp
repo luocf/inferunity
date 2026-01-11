@@ -23,6 +23,12 @@ public:
             return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT,
                                "Conv only supports FLOAT32");
         }
+        // 检查输入维度（Conv需要4D输入：NCHW）
+        const Shape& input_shape = inputs[0]->GetShape();
+        if (input_shape.dims.size() < 4) {
+            return Status::Error(StatusCode::ERROR_INVALID_ARGUMENT,
+                               "Conv input must be 4D (NCHW format)");
+        }
         return Status::Ok();
     }
     

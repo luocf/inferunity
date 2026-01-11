@@ -99,5 +99,12 @@ void FreeMemory(void* ptr);
 void ReleaseUnusedMemory();
 MemoryStats GetMemoryStats();  // CPU设备的内存统计
 
+// 内存碎片整理
+void DefragmentMemory();
+
+// 内存池配置
+void SetMemoryPoolMaxSize(size_t max_size);
+void SetMemoryReleaseThreshold(double threshold);  // 0.0-1.0，未使用内存占比阈值
+
 } // namespace inferunity
 

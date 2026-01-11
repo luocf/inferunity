@@ -1,21 +1,16 @@
-# InferUnity 推理引擎
+# InferUnity
 
-跨平台、高性能的深度学习推理引擎，支持多种硬件后端和模型格式。
+高性能深度学习推理引擎，支持 ONNX 模型加载和推理。
 
-## 核心特性
+## 特性
 
-- **跨平台支持**: Linux (x86_64/ARM64), macOS (Apple Silicon + Intel), 嵌入式平台 (NVIDIA Jetson, 高通骁龙)
-- **多硬件后端**: CPU, NVIDIA GPU (CUDA/TensorRT), Vulkan, Metal, SNPE, ARM NN
-- **模型格式**: ONNX, TensorFlow, PyTorch, TFLite
-- **高性能优化**: 算子融合、量化、内存优化、自动调优
-- **轻量级部署**: 最小依赖、模块化编译、静态链接支持
-
-## 文档
-
-- [设计文档](docs/DESIGN.md) - 架构设计和核心组件
-- [实现计划](docs/IMPLEMENTATION_PLAN.md) - 开发计划和排期
-- [API文档](docs/API.md) - API使用说明
-- [任务清单](TODO.md) - 当前开发任务
+- ✅ 支持 ONNX 模型加载和推理
+- ✅ 26个算子实现（数学运算、激活函数、卷积、归一化等）
+- ✅ CPU 后端实现
+- ✅ 内存池和生命周期优化
+- ✅ MatMul 算子 BLAS 优化（Accelerate/OpenBLAS）
+- ✅ 线程池支持
+- ✅ 70%+ 测试覆盖率
 
 ## 快速开始
 
@@ -23,52 +18,82 @@
 
 ```bash
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DUSE_BLAS=ON
 make -j$(nproc)
 ```
 
-### 使用示例
+### 基本使用
 
 ```cpp
-#include "inferunity/engine.h"
+#include "inferunity/runtime.h"
+
+// 创建推理会话
+auto session = std::make_unique<InferenceSession>();
 
 // 加载模型
-auto engine = inferunity::Engine::Create();
-engine->LoadModel("model.onnx");
+session->LoadModel("model.onnx");
 
 // 准备输入
-auto input = engine->CreateTensor({1, 3, 224, 224}, inferunity::DataType::FLOAT32);
-// ... 填充输入数据 ...
+auto input = CreateTensor(Shape({1, 3, 224, 224}), DataType::FLOAT32);
 
-// 执行推理
-engine->Run(input, output);
-
-// 获取输出
-auto result = engine->GetOutput(0);
+// 运行推理
+std::vector<Tensor*> inputs = {input.get()};
+std::vector<Tensor*> outputs;
+session->Run(inputs, outputs);
 ```
 
-## 目录结构
+更多示例请参见 [用户指南](docs/USER_GUIDE.md)。
 
+## 文档
+
+- [推理引擎基础知识](docs/INFERENCE_ENGINE_BASICS.md) - 详细的推理引擎核心概念和实现详解（推荐阅读）
+- [用户指南](docs/USER_GUIDE.md) - 快速开始和使用示例
+- [API参考](docs/API_REFERENCE.md) - 完整的API文档
+- [功能总结](docs/FEATURE_SUMMARY.md) - 所有已实现功能的详细总结
+- [下一步计划](docs/NEXT_STEPS.md) - 后续开发计划
+- [性能基准](docs/PERFORMANCE_BENCHMARKS.md) - 性能测试结果
+- [项目状态](docs/PROJECT_STATUS.md) - 项目完成情况
+- [完成总结](docs/FINAL_COMPLETION_SUMMARY.md) - 详细完成情况
+
+## 支持的算子
+
+### 数学运算
+Add, Sub, Mul, Div, MatMul
+
+### 激活函数
+Relu, Sigmoid, GELU, SiLU
+
+### 卷积和池化
+Conv, MaxPool, AveragePool
+
+### 归一化
+BatchNormalization, LayerNormalization, RMSNorm
+
+### 形状操作
+Reshape, Transpose, Slice, Gather
+
+## 性能优化
+
+- **BLAS优化**：MatMul算子支持Accelerate（macOS）和OpenBLAS（Linux）
+- **SIMD优化**：自动启用AVX/AVX2/NEON优化
+- **内存优化**：内存池和生命周期分析
+
+## 测试
+
+```bash
+cd build
+make test_performance  # 性能测试
+make test_math_operators  # 数学算子测试
+make test_activation_operators  # 激活函数测试
+make test_normalization_operators  # 归一化测试
+make test_shape_operators  # 形状操作测试
 ```
-inferunity/
-├── include/          # 公共头文件
-├── src/              # 核心实现
-│   ├── core/        # 核心组件 (IR, 张量, 内存)
-│   ├── hal/         # 硬件抽象层
-│   ├── optimizers/  # 优化器
-│   ├── runtime/     # 运行时系统
-│   └── backends/    # 硬件后端实现
-├── tools/            # 工具链
-├── tests/            # 测试代码
-└── docs/             # 文档
-```
 
-## 性能目标
+## 更新日志
 
-- **延迟**: ResNet-50 (224x224) < 10ms (Jetson Orin)
-- **内存**: 运行时内存 < 100MB (基础)
-- **启动**: 冷启动时间 < 100ms
-- **精度**: FP32精度无损，INT8精度损失<1%
+- 2026-01-06: 完成MatMul算子BLAS优化
+- 2026-01-06: 完成性能基准测试
+- 2026-01-06: 完成文档完善
 
 ## 许可证
 

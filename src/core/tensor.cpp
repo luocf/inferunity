@@ -136,34 +136,107 @@ Tensor Tensor::Slice(const std::vector<int64_t>& starts, const std::vector<int64
         offsets.push_back(start);
     }
     
-    // 计算数据偏移量（按内存布局）
+    // 计算数据偏移量（按行主序布局，即C风格）
+    // 对于多维数组，按行主序：索引[i,j,k] = i*stride0 + j*stride1 + k*stride2
+    // 其中 stride[i] = product of dims[i+1:]
     size_t data_offset = 0;
-    if (layout_ == MemoryLayout::NCHW) {
-        // NCHW布局：按N, C, H, W顺序计算偏移
-        size_t stride = 1;
-        for (int i = static_cast<int>(shape_.dims.size()) - 1; i >= 0; --i) {
-            data_offset += offsets[i] * stride;
-            stride *= shape_.dims[i];
+    std::vector<size_t> strides(shape_.dims.size());
+    
+    // 计算原始tensor的strides
+    strides[shape_.dims.size() - 1] = 1;
+    for (int i = static_cast<int>(shape_.dims.size()) - 2; i >= 0; --i) {
+        strides[i] = strides[i + 1] * shape_.dims[i + 1];
+    }
+    
+    // 计算起始偏移
+    for (size_t i = 0; i < offsets.size(); ++i) {
+        data_offset += offsets[i] * strides[i];
+    }
+    
+    // 检查切片是否连续（简化：检查最后一个维度是否完整切片）
+    bool is_contiguous = true;
+    if (shape_.dims.size() > 1) {
+        // 如果最后一个维度不是完整切片，则不是连续的
+        int last_dim = static_cast<int>(shape_.dims.size()) - 1;
+        if (offsets[last_dim] != 0 || new_dims[last_dim] != shape_.dims[last_dim]) {
+            is_contiguous = false;
         }
-    } else {
-        // NHWC或其他布局：简化处理
-        size_t stride = 1;
-        for (int i = static_cast<int>(shape_.dims.size()) - 1; i >= 0; --i) {
-            data_offset += offsets[i] * stride;
-            stride *= shape_.dims[i];
+        // 检查其他维度是否完整切片
+        for (size_t i = 0; i < shape_.dims.size() - 1; ++i) {
+            if (offsets[i] != 0 || new_dims[i] != shape_.dims[i]) {
+                // 如果这个维度不是完整切片，需要检查下一维是否完整
+                if (i + 1 < shape_.dims.size()) {
+                    if (offsets[i + 1] != 0 || new_dims[i + 1] != shape_.dims[i + 1]) {
+                        is_contiguous = false;
+                        break;
+                    }
+                }
+            }
         }
     }
     
     data_offset *= element_size;
     
-    // 创建视图Tensor（共享数据，不拥有）
-    Tensor view(Shape(new_dims), dtype_, 
-                static_cast<uint8_t*>(data_) + data_offset, 
-                layout_, device_type_);
-    view.owns_data_ = false;  // 视图不拥有数据
-    view.allocator_ = allocator_;  // 共享分配器
-    
-    return view;
+    if (is_contiguous) {
+        // 连续切片：创建视图
+        Tensor view(Shape(new_dims), dtype_, 
+                    static_cast<uint8_t*>(data_) + data_offset, 
+                    layout_, device_type_);
+        view.owns_data_ = false;  // 视图不拥有数据
+        view.allocator_ = allocator_;  // 共享分配器
+        return view;
+    } else {
+        // 非连续切片：复制数据到新tensor
+        Tensor result(Shape(new_dims), dtype_, device_type_);
+        size_t element_count = result.GetElementCount();
+        
+        // 计算原始和结果的strides
+        std::vector<size_t> result_strides(new_dims.size());
+        result_strides[new_dims.size() - 1] = 1;
+        for (int i = static_cast<int>(new_dims.size()) - 2; i >= 0; --i) {
+            result_strides[i] = result_strides[i + 1] * new_dims[i + 1];
+        }
+        
+        // 复制数据：使用嵌套循环遍历所有元素
+        const uint8_t* src_base = static_cast<const uint8_t*>(data_);
+        uint8_t* dst_data = static_cast<uint8_t*>(result.GetData());
+        
+        // 使用递归函数复制每个元素
+        std::function<void(const std::vector<size_t>&)> copy_element;
+        copy_element = [&](const std::vector<size_t>& indices) {
+            if (indices.size() == new_dims.size()) {
+                // 计算源索引（相对于原始tensor的绝对索引）
+                size_t src_elem_idx = 0;
+                for (size_t i = 0; i < indices.size(); ++i) {
+                    src_elem_idx += (offsets[i] + indices[i]) * strides[i];
+                }
+                
+                // 计算目标索引（相对于结果tensor的索引）
+                size_t dst_elem_idx = 0;
+                for (size_t i = 0; i < indices.size(); ++i) {
+                    dst_elem_idx += indices[i] * result_strides[i];
+                }
+                
+                // 复制元素
+                // data_offset是起始位置的字节偏移，src_elem_idx是元素索引
+                const uint8_t* src_ptr = src_base + src_elem_idx * element_size;
+                uint8_t* dst_ptr = dst_data + dst_elem_idx * element_size;
+                std::memcpy(dst_ptr, src_ptr, element_size);
+                return;
+            }
+            
+            // 递归到下一维度
+            for (size_t i = 0; i < new_dims[indices.size()]; ++i) {
+                std::vector<size_t> new_indices = indices;
+                new_indices.push_back(i);
+                copy_element(new_indices);
+            }
+        };
+        
+        copy_element(std::vector<size_t>());
+        
+        return result;
+    }
 }
 
 Status Tensor::CopyTo(Tensor& dst) const {

@@ -71,6 +71,16 @@ public:
     std::future<Status> RunAsync(const std::vector<Tensor*>& inputs,
                                 std::vector<Tensor*>& outputs);
     
+    // 批量推理（顺序执行）
+    Status RunBatch(
+        const std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_inputs,
+        std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_outputs);
+    
+    // 批量推理（优化版本：合并batch维度）
+    Status RunBatchOptimized(
+        const std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_inputs,
+        std::vector<std::vector<std::shared_ptr<Tensor>>>& batch_outputs);
+    
     // 张量创建
     std::shared_ptr<Tensor> CreateInputTensor(size_t input_index);
     std::shared_ptr<Tensor> CreateInputTensor(const std::string& input_name);

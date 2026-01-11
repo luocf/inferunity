@@ -36,6 +36,7 @@ option(ENABLE_SNPE "Enable SNPE backend" OFF)
 option(ENABLE_ARMNN "Enable ARM NN backend" OFF)
 option(ENABLE_ONNXRUNTIME "Enable ONNX Runtime backend" OFF)
 option(USE_SYSTEM_PROTOBUF "Use system protobuf" ON)
+option(USE_BLAS "Use BLAS library for MatMul optimization" ON)
 
 # 输出目录
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -178,6 +179,45 @@ target_include_directories(inferunity_operators PUBLIC
 
 target_link_libraries(inferunity_operators PUBLIC inferunity_core)
 
+# BLAS库支持（用于MatMul优化）
+if(USE_BLAS)
+    if(APPLE)
+        # macOS: 使用Accelerate框架（包含优化的BLAS实现）
+        find_library(ACCELERATE_FRAMEWORK Accelerate)
+        if(ACCELERATE_FRAMEWORK)
+            target_link_libraries(inferunity_operators PUBLIC ${ACCELERATE_FRAMEWORK})
+            target_compile_definitions(inferunity_operators PRIVATE INFERUNITY_USE_ACCELERATE)
+            message(STATUS "Found Accelerate framework: ${ACCELERATE_FRAMEWORK}")
+        else()
+            message(WARNING "Accelerate framework not found, MatMul will use naive implementation")
+        endif()
+    else()
+        # Linux: 尝试查找OpenBLAS
+        find_package(OpenBLAS QUIET)
+        if(OpenBLAS_FOUND)
+            target_link_libraries(inferunity_operators PUBLIC OpenBLAS::OpenBLAS)
+            target_compile_definitions(inferunity_operators PRIVATE INFERUNITY_USE_OPENBLAS)
+            message(STATUS "Found OpenBLAS: ${OpenBLAS_LIBRARIES}")
+        else()
+            # 尝试pkg-config
+            find_package(PkgConfig QUIET)
+            if(PkgConfig_FOUND)
+                pkg_check_modules(OPENBLAS QUIET openblas)
+                if(OPENBLAS_FOUND)
+                    target_link_libraries(inferunity_operators PUBLIC ${OPENBLAS_LIBRARIES})
+                    target_include_directories(inferunity_operators PUBLIC ${OPENBLAS_INCLUDE_DIRS})
+                    target_compile_definitions(inferunity_operators PRIVATE INFERUNITY_USE_OPENBLAS)
+                    message(STATUS "Found OpenBLAS via pkg-config")
+                else()
+                    message(WARNING "OpenBLAS not found, MatMul will use naive implementation")
+                endif()
+            else()
+                message(WARNING "OpenBLAS not found, MatMul will use naive implementation")
+            endif()
+        endif()
+    endif()
+endif()
+
 # 启用SIMD优化
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(inferunity_operators PRIVATE
@@ -203,6 +243,7 @@ add_library(inferunity_optimizers STATIC
     src/optimizers/optimizer.cpp
     src/optimizers/constant_folding.cpp
     src/optimizers/operator_fusion.cpp
+    src/optimizers/performance_optimizer.cpp
 )
 
 target_include_directories(inferunity_optimizers PUBLIC

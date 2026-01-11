@@ -9,12 +9,15 @@
 namespace inferunity {
 
 // CPU分配器实现
+// 使用内存池进行分配，以便统计和管理
 void* CPUAllocator::Allocate(size_t size) {
-    return std::malloc(size);
+    // 使用内存池分配（带对齐）
+    return AllocateMemory(size, 16);  // 16字节对齐
 }
 
 void CPUAllocator::Free(void* ptr) {
-    std::free(ptr);
+    // 使用内存池释放
+    FreeMemory(ptr);
 }
 
 size_t CPUAllocator::GetAllocatedSize(void* ptr) const {

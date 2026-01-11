@@ -43,7 +43,7 @@ TEST_F(OperatorsTest, ReshapeOperator) {
     
     // 创建输入
     auto input = CreateTensor(Shape({2, 3, 4}), DataType::FLOAT32);
-    auto shape_tensor = CreateTensor(Shape({3}), DataType::INT64);
+    auto shape_tensor = CreateTensor(Shape({1}), DataType::INT64);  // 目标形状是[24]，只需要1个元素
     
     // 设置目标形状 [24]
     int64_t* shape_data = static_cast<int64_t*>(shape_tensor->GetData());

@@ -40,17 +40,21 @@ TEST_F(ONNXParserTest, ShapeInference) {
 TEST_F(ONNXParserTest, GraphValidation) {
     auto graph = std::make_unique<Graph>();
     
-    // 空图应该验证通过
+    // 空图应该验证失败（没有输入输出）
     Status status = graph->Validate();
-    EXPECT_TRUE(status.IsOk());
+    EXPECT_FALSE(status.IsOk());
     
-    // 添加节点
+    // 添加节点和输入输出
     Node* node = graph->AddNode("Relu", "relu1");
     Value* input = graph->AddValue();
     Value* output = graph->AddValue();
     
     node->AddInput(input);
     node->AddOutput(output);
+    
+    // 添加图的输入输出（Validate要求图必须有输入输出）
+    graph->AddInput(input);
+    graph->AddOutput(output);
     
     // 验证图
     status = graph->Validate();

@@ -73,9 +73,9 @@ TEST_F(PerformanceTest, MatMulOperatorPerformance) {
         GTEST_SKIP() << "MatMul operator not available";
     }
     
-    // 测试不同矩阵大小
+    // 测试不同矩阵大小（包括更大的矩阵以验证BLAS优化效果）
     std::vector<std::pair<int64_t, int64_t>> sizes = {
-        {64, 64}, {128, 128}, {256, 256}, {512, 512}
+        {64, 64}, {128, 128}, {256, 256}, {512, 512}, {1024, 1024}
     };
     
     for (auto [m, n] : sizes) {

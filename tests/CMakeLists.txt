@@ -209,6 +209,20 @@ if(GTest_FOUND)
     link_test_target(test_performance)
     add_test(NAME PerformanceTests COMMAND test_performance)
     
+    # 错误处理测试
+    add_executable(test_error_handling
+        test_error_handling.cpp
+    )
+    link_test_target(test_error_handling)
+    add_test(NAME ErrorHandlingTests COMMAND test_error_handling)
+    
+    # 内存优化测试
+    add_executable(test_memory_optimization
+        test_memory_optimization.cpp
+    )
+    link_test_target(test_memory_optimization)
+    add_test(NAME MemoryOptimizationTests COMMAND test_memory_optimization)
+    
 else()
     message(WARNING "Google Test not found, tests will not be built")
 endif()

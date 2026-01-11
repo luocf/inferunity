@@ -6,6 +6,13 @@
 #include <algorithm>
 #include <cstring>
 
+// BLAS库支持
+#ifdef INFERUNITY_USE_ACCELERATE
+#include <Accelerate/Accelerate.h>
+#elif defined(INFERUNITY_USE_OPENBLAS)
+#include <cblas.h>
+#endif
+
 namespace inferunity {
 namespace operators {
 
@@ -168,6 +175,36 @@ public:
         // 初始化输出
         std::memset(C, 0, output->GetSizeInBytes());
         
+        // 使用BLAS库优化（如果可用）
+#ifdef INFERUNITY_USE_ACCELERATE
+        // macOS Accelerate框架：使用cblas_sgemm
+        // C = alpha * A * B + beta * C
+        // 这里 alpha=1.0, beta=0.0, 所以 C = A * B
+        cblas_sgemm(CblasRowMajor,      // 行主序
+                    CblasNoTrans,       // A不转置
+                    CblasNoTrans,       // B不转置
+                    M,                  // A的行数
+                    N,                  // B的列数
+                    K,                  // A的列数/B的行数
+                    1.0f,               // alpha
+                    A,                  // A矩阵
+                    K,                  // A的leading dimension
+                    B,                  // B矩阵
+                    N,                  // B的leading dimension
+                    0.0f,               // beta
+                    C,                  // C矩阵（输出）
+                    N);                 // C的leading dimension
+#elif defined(INFERUNITY_USE_OPENBLAS)
+        // OpenBLAS：使用cblas_sgemm
+        cblas_sgemm(CblasRowMajor,
+                    CblasNoTrans,
+                    CblasNoTrans,
+                    M, N, K,
+                    1.0f, A, K,
+                    B, N,
+                    0.0f, C, N);
+#else
+        // 朴素实现（fallback）
         // 矩阵乘法: C = A * B
         for (int64_t i = 0; i < M; ++i) {
             for (int64_t j = 0; j < N; ++j) {
@@ -178,6 +215,7 @@ public:
                 C[i * N + j] = sum;
             }
         }
+#endif
         
         return Status::Ok();
     }
