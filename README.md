@@ -47,6 +47,8 @@ session->Run(inputs, outputs);
 ## 文档
 
 - [推理引擎基础知识](docs/INFERENCE_ENGINE_BASICS.md) - 详细的推理引擎核心概念和实现详解（推荐阅读）
+- [ONNX模型加载流程详解](docs/ONNX_MODEL_LOADING_EXPLAINED.md) - 从文件加载到Graph构建的完整流程（推荐学习）
+- [推理执行流程详解](docs/INFERENCE_EXECUTION_FLOW.md) - 从Run()调用到输出结果的完整执行流程（推荐学习）
 - [用户指南](docs/USER_GUIDE.md) - 快速开始和使用示例
 - [API参考](docs/API_REFERENCE.md) - 完整的API文档
 - [功能总结](docs/FEATURE_SUMMARY.md) - 所有已实现功能的详细总结
